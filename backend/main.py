@@ -3,89 +3,98 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime
 import yfinance as yf
-import pickle
 import os
-import time
 import httpx
-
 from dotenv import load_dotenv
 
-
-# Load environment variables from the .env file
+# ✅ Load environment variables
 load_dotenv()
 
-# Get SPRING_BOOT_URL from environment variables
-SPRING_BOOT_URL = os.getenv("SPRING_BOOT_URL", "http://localhost:8080")  # Default to localhost if not found
-
+# ✅ Use correct Spring Boot URL (avoid duplicate `/api/` in path)
+SPRING_BOOT_URL = os.getenv("SPRING_BOOT_URL", "http://api.techbleats.eaglesoncloude.com:8080")
 
 app = FastAPI()
 
-# CORS configuration
+# ✅ Health Check Endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "UP"}
+
+# ✅ CORS configuration
 origins = [
-    "http://localhost",  # Allow requests from localhost
-    "http://localhost:80",  # Allow requests from localhost on port 3000 (if you use React, for example)
-    "http://127.0.0.1"
+    "http://localhost",
+    "http://127.0.0.1",
+    "http://techbleats.eaglesoncloude.com",
+    "https://techbleats.eaglesoncloude.com"
 ]
 
-# Add CORSMiddleware to allow CORS for the specified origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Allows CORS for these origins
+    allow_origins=origins,  # ✅ Allow frontend domains
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Define the response model
+# ✅ Define response model
 class StockPriceResponse(BaseModel):
     ticker: str
     date: str
     price: float
 
-
-@app.get("/stock/{ticker}", response_model=StockPriceResponse)
+# ✅ Fix API Path & Error Handling
+@app.get("/api/stock/{ticker}", response_model=StockPriceResponse)
 async def get_stock_price(ticker: str, date: str = None):
+    # ✅ Ensure valid date format
+    if date:
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"{SPRING_BOOT_URL}/{ticker}/{date}")
-    
-    print (f"response code for {SPRING_BOOT_URL}/{ticker}/{date} is {response.status_code}")
+    # ✅ Try Fetching Data from Spring Boot Cache
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{SPRING_BOOT_URL}/stock/{ticker}", params={"date": date})
 
-    if response.status_code == 200:
-        price = response.json()
-        return StockPriceResponse(ticker=ticker, date=date, price=price)
+        print(f"Response from {SPRING_BOOT_URL}/stock/{ticker}?date={date}: {response.status_code}")
 
-    price = "yay"
+        if response.status_code == 200:
+            data = response.json()
+
+            # ✅ Ensure `price` exists before returning response
+            if "price" not in data:
+                raise HTTPException(status_code=500, detail="Spring Boot API response missing 'price' field.")
+
+            return StockPriceResponse(ticker=data["ticker"], date=data["date"], price=data["price"])
+
+    except httpx.RequestError as e:
+        print(f"Error reaching Spring Boot Backend: {e}")
+
+    # ✅ Fetch Data from Yahoo Finance as Fallback
     try:
         stock = yf.Ticker(ticker)
-        print (f"about to post 1 {price}")
+        stock_data = stock.history(period="1d")
 
-        if date:
-            print (f"about to post 0 {price}")
-            stock_date = datetime.strptime(date, "%Y-%m-%d")
-            stock_data = stock.history(period="1d")
-            print (f"about to post 2 {price}")
-            if stock_data.empty:
-                print (f"about to post 3 {price}")
-                raise HTTPException(status_code=404, detail="No data for this date")
-            price = round (stock_data['Close'].iloc[0], 2)
-            print (f"about to post 3b {price} ")
-        else:
-            stock_data = stock.history(period="1d")
-            price = round (stock_data['Close'].iloc[-1] , 2)
-        
-            print (f"about to post 4 {price}")
+        if stock_data.empty:
+            raise HTTPException(status_code=404, detail=f"No data found for {ticker} on {date}")
 
-        print (f"about to post {price}")
+        # ✅ Extract price correctly
+        price = round(stock_data['Close'].iloc[-1], 2) if not date else round(stock_data['Close'].iloc[0], 2)
+        print(f"Stock price for {ticker}: {price}")
 
-        #cache_data = {"price": price}
-
-        async with httpx.AsyncClient() as client:
-          await client.post(f"{SPRING_BOOT_URL}/save?ticker={ticker}&date={date}&price={price}")
+        # ✅ Store in cache (Spring Boot)
+        try:
+            async with httpx.AsyncClient() as client:
+                cache_response = await client.post(
+                    f"{SPRING_BOOT_URL}/stock/save",
+                    params={"ticker": ticker, "date": date, "price": price}
+                )
+                print(f"Cache save response: {cache_response.status_code}")
+        except httpx.RequestError as e:
+            print(f"Error caching data in Spring Boot: {e}")
 
         return StockPriceResponse(ticker=ticker, date=date or str(datetime.today().date()), price=price)
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
+        raise HTTPException(status_code=500, detail=f"Failed to fetch stock price: {str(e)}")
