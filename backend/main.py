@@ -24,8 +24,8 @@ async def health_check():
 origins = [
     "http://localhost",
     "http://127.0.0.1",
-    "http://techbleats.eaglesoncloude.com",
-    "https://techbleats.eaglesoncloude.com"
+    "https://techbleats.eaglesoncloude.com",
+    "http://techbleats.eaglesoncloude.com"
 ]
 
 app.add_middleware(
