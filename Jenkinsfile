@@ -29,7 +29,14 @@ pipeline {
             steps {
                 script {
                     echo 'Checking out source code...'
-                    checkout scm
+                    checkout([$class: 'GitSCM',
+                        branches: [[name: '*/master']],
+                        extensions: [[$class: 'WipeWorkspace']],
+                        userRemoteConfigs: [[
+                            credentialsId: 'github-credentials',
+                            url: 'https://github.com/jibolaolu/stock-repo.git'
+                        ]]
+                    ])
                 }
             }
         }
