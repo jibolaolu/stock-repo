@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Price Lookup By Techbleat!</title>
+    <style>
+        /* Basic Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #7F7FD5, #86A8E7, #91EAE4); /* Beautiful gradient background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+
+        .container {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 40px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 800px;
+            text-align: center;
+            box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .container img {
+            width: 650px;
+            height: 200px;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        label {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+            outline: none;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        input[type="text"]:focus,
+        input[type="date"]:focus {
+            border-color: #86A8E7;
+        }
+
+        button {
+            background-color: #86A8E7;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #7F7FD5;
+        }
+
+        .loading {
+            display: none;
+            color: #333;
+            font-size: 18px;
+            margin-top: 15px;
+        }
+
+        /* Result Box */
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e1f3e8;
+            border: 1px solid #b4e4b4;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c6b2f;
+            display: none;
+        }
+
+        /* Error Box */
+        .error {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #ffe6e6;
+            border: 1px solid #ffcccc;
+            border-radius: 8px;
+            font-size: 18px;
+            color: #e60000;
+            display: none;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .container {
+                padding: 30px;
+                width: 90%;
+            }
+        }
+
+        /* Styling for a better contrast */
+        .container label, .container input, .container button {
+            color: #333; /* Darker color for better visibility on white background */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Logo Section -->
+        <img src="header.png" alt="Stock Logo" />
+
+        <h2>Stock Price Lookup By Techbleat!</h2>
+
+        <!-- Ticker Input -->
+        <label for="ticker">Enter Stock Ticker (e.g., AAPL):</label>
+        <input type="text" id="ticker" placeholder="AAPL" />
+
+        <!-- Date Picker -->
+        <label for="date">Pick a Date:</label>
+        <input type="date" id="date" />
+
+        <!-- Fetch Button -->
+        <button onclick="getStockPrice()">Get Stock Price</button>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading">Loading...</div>
+
+        <!-- Result Display -->
+        <div id="result" class="result"></div>
+
+        <!-- Error Display -->
+        <div id="error" class="error"></div>
+    </div>
+
+<script>
+    async function getStockPrice() {
+        const ticker = document.getElementById("ticker").value.trim();
+        let date = document.getElementById("date").value.trim();
+
+        // Remove invalid characters from date
+        date = date.replace(/[^0-9\-]/g, "");
+
+        // Clear previous results and errors
+        document.getElementById("result").style.display = "none";
+        document.getElementById("error").style.display = "none";
+        document.getElementById("loading").style.display = "block";
+
+        if (!ticker) {
+            document.getElementById("error").textContent = "Please enter a stock ticker.";
+            document.getElementById("error").style.display = "block";
+            document.getElementById("loading").style.display = "none";
+            return;
+        }
+
+        try {
+            const url = date
+                ? `http://api.techbleats.eaglesoncloude.com/api/stock/${ticker}?date=${date}`
+                : `http://api.techbleats.eaglesoncloude.com/api/stock/${ticker}`;
+
+            console.log("Fetching:", url);
+
+            const response = await fetch(url, {
+                method: "GET",
+                headers: {
+                    "Accept": "application/json",
+                },
+                redirect: "follow",
+            });
+
+            // ✅ Ensure response is JSON before parsing
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error(`Unexpected response: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log("API Response:", data);
+
+            // ✅ Check if `price` is missing
+            if (!data.price) {
+                throw new Error("API response does not contain a valid price.");
+            }
+
+            document.getElementById("result").textContent =
+                `The price of ${data.ticker} on ${data.date} was $${data.price.toFixed(2)}`;
+            document.getElementById("result").style.display = "block";
+        } catch (error) {
+            console.error("Error fetching stock price:", error);
+            document.getElementById("error").textContent = `Error: ${error.message}`;
+            document.getElementById("error").style.display = "block";
+        } finally {
+            document.getElementById("loading").style.display = "none";
+        }
+    }
+</script>
+</body>
+</html>

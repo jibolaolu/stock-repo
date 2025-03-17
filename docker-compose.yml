@@ -1,0 +1,45 @@
+services:
+  redis:
+    image: "redis:alpine"
+    container_name: redis
+    ports:
+      - "6379:6379"  # Expose Redis port to the host
+    networks:
+      - stock-price-network
+
+  stock-cache:
+    build: ./cache
+    ports:
+      - "8080:8080"  # Expose port 8080 to the host
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+    networks:
+      - stock-price-network
+    depends_on:
+      - redis
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - "8000:8000"
+    networks:
+      - stock-price-network
+    depends_on:
+      - frontend
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "80:80"
+    networks:
+      - stock-price-network
+
+networks:
+  stock-price-network:
+    driver: bridge
