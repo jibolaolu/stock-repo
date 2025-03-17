@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # stock-repo
 =======
 # Stock Price Cache Application  [ By Techbleat ]
@@ -56,4 +55,3 @@ docker-compose up -d --build --force-recreate
 2. **Spring Boot** is running on http://localhost:8080.
 3. **Redis** is running on localhost:6379.
 4. **Web Frontend** is available on http://localhost.
->>>>>>> feature/dev
