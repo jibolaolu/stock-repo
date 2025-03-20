@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'docker:latest'
+            args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     environment {
         AWS_REGION = 'eu-west-2'  // Change to your AWS region
@@ -37,6 +42,14 @@ pipeline {
                             url: 'https://github.com/jibolaolu/stock-repo.git'
                         ]]
                     ])
+                }
+            }
+        }
+
+        stage('Verify Git Directory') {
+            steps {
+                script {
+                    sh "git status"  // Ensure we are inside a valid git repo
                 }
             }
         }
