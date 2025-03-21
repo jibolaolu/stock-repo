@@ -418,6 +418,10 @@ pipeline {
         HOME = "${env.WORKSPACE}"
     }
 
+    properties([
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+    ])
+
     stages {
         stage('Set AWS Context') {
             steps {
