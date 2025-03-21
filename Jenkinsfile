@@ -413,17 +413,17 @@ pipeline {
 
     environment {
         AWS_REGION = 'eu-west-2'
-        ECR_ACCOUNT_ID = credentials('aws-account-id')  // Securely fetch from Jenkins
+        ECR_ACCOUNT_ID = credentials('aws-account-id') // Securely fetch from Jenkins
         ECR_REGISTRY = "${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         HOME = "${env.WORKSPACE}"
     }
 
     properties([
         buildDiscarder(logRotator(
-            daysToKeepStr: '7',         // Keep builds for 7 days
-            numToKeepStr: '5',          // Or only keep the last 5 builds
-            artifactDaysToKeepStr: '3', // Keep artifacts for 3 days
-            artifactNumToKeepStr: '2'   // Or only keep last 2 artifacts
+            daysToKeepStr: '7',
+            numToKeepStr: '5',
+            artifactDaysToKeepStr: '3',
+            artifactNumToKeepStr: '2'
         ))
     ])
 
@@ -437,8 +437,11 @@ pipeline {
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
                     script {
-                        env.AWS_ACCOUNT_ID = sh(script: "aws sts get-caller-identity --query 'Account' --output text", returnStdout: true).trim()
-                        env.ECR_REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
+                        env.AWS_ACCOUNT_ID = sh(
+                            script: "aws sts get-caller-identity --query 'Account' --output text",
+                            returnStdout: true
+                        ).trim()
+                        env.ECR_REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                     }
                 }
             }
@@ -446,7 +449,8 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                checkout([$class: 'GitSCM',
+                checkout([
+                    $class: 'GitSCM',
                     branches: [[name: '*/master']],
                     extensions: [[$class: 'WipeWorkspace']],
                     userRemoteConfigs: [[
@@ -461,7 +465,6 @@ pipeline {
             steps {
                 script {
                     def changes = sh(script: "git diff --name-only HEAD^ HEAD", returnStdout: true).trim().split("\n")
-
                     env.BUILD_FRONTEND = changes.any { it.startsWith("frontend/") } ? "true" : "false"
                     env.BUILD_BACKEND  = changes.any { it.startsWith("backend/") } ? "true" : "false"
                     env.BUILD_CACHE    = changes.any { it.startsWith("cache/") } ? "true" : "false"
@@ -486,7 +489,12 @@ pipeline {
                     repos.each { repo ->
                         if (repo.build == "true") {
                             def latestTag = sh(
-                                script: "aws ecr describe-images --repository-name ${repo.name} --region ${AWS_REGION} --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' --output text 2>/dev/null || echo none",
+                                script: """
+                                    aws ecr describe-images --repository-name ${repo.name} \
+                                    --region ${AWS_REGION} \
+                                    --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' \
+                                    --output text 2>/dev/null || echo none
+                                """,
                                 returnStdout: true
                             ).trim()
 
@@ -519,7 +527,8 @@ pipeline {
                         export AWS_ACCESS_KEY_ID=\$AWS_ACCESS_KEY_ID
                         export AWS_SECRET_ACCESS_KEY=\$AWS_SECRET_ACCESS_KEY
                         export HOME=\$WORKSPACE
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${ECR_REGISTRY}
                     """
                 }
             }
@@ -532,8 +541,7 @@ pipeline {
                     steps {
                         script {
                             def tag = env.FRONTEND_VERSION
-                            def repo = "${env.ECR_REGISTRY}/tech-bleats-frontend"
-
+                            def repo = "${env.ECR_REGISTRY}/teach-bleats-frontend"
                             sh """
                                 export HOME=\$WORKSPACE
                                 cd frontend
@@ -550,8 +558,7 @@ pipeline {
                     steps {
                         script {
                             def tag = env.BACKEND_VERSION
-                            def repo = "${env.ECR_REGISTRY}/tech-bleats-backend"
-
+                            def repo = "${env.ECR_REGISTRY}/teach-bleats-backend"
                             sh """
                                 export HOME=\$WORKSPACE
                                 cd backend
@@ -569,7 +576,6 @@ pipeline {
                         script {
                             def tag = env.CACHE_VERSION
                             def repo = "${env.ECR_REGISTRY}/teach-bleats-cache"
-
                             sh """
                                 export HOME=\$WORKSPACE
                                 cd cache
