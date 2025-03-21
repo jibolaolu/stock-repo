@@ -125,17 +125,18 @@ pipeline {
             secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
         ]]) {
             script {
-                echo '🔐 Logging into AWS ECR with custom config path...'
+                echo '🔐 Logging into AWS ECR...'
                 sh """
                     export AWS_ACCESS_KEY_ID=\$AWS_ACCESS_KEY_ID
                     export AWS_SECRET_ACCESS_KEY=\$AWS_SECRET_ACCESS_KEY
-                    mkdir -p \$WORKSPACE/.docker
-                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin --config \$WORKSPACE/.docker ${env.ECR_REGISTRY}
+                    export HOME=\$WORKSPACE
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${env.ECR_REGISTRY}
                 """
             }
         }
     }
 }
+
 
         stage('Build & Push Docker Images') {
             parallel {
