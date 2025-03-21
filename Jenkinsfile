@@ -117,22 +117,26 @@ pipeline {
         }
 
         stage('Login to AWS ECR') {
-            steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws_credentials',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                ]]) {
-                    script {
-                        echo 'Logging into AWS ECR...'
-                        sh """
-                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${env.ECR_REGISTRY}
-                        """
-                    }
-                }
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws_credentials',
+            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+        ]]) {
+            script {
+                echo '🔐 Logging into AWS ECR...'
+                sh """
+                    export AWS_ACCESS_KEY_ID=\$AWS_ACCESS_KEY_ID
+                    export AWS_SECRET_ACCESS_KEY=\$AWS_SECRET_ACCESS_KEY
+                    export HOME=\$WORKSPACE
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${env.ECR_REGISTRY}
+                """
             }
         }
+    }
+}
+
 
         stage('Build & Push Docker Images') {
             parallel {
