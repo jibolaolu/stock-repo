@@ -415,6 +415,7 @@ pipeline {
         AWS_REGION = 'eu-west-2'
         ECR_ACCOUNT_ID = credentials('aws-account-id')  // Securely fetch from Jenkins
         ECR_REGISTRY = "${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        HOME = "${env.WORKSPACE}"
     }
 
     stages {
@@ -525,6 +526,7 @@ pipeline {
                             def repo = "${env.ECR_REGISTRY}/teach-bleats-frontend"
 
                             sh """
+                                export HOME=\$WORKSPACE
                                 cd frontend
                                 docker build -t frontend .
                                 docker tag frontend:latest ${repo}:${tag}
@@ -542,6 +544,7 @@ pipeline {
                             def repo = "${env.ECR_REGISTRY}/teach-bleats-backend"
 
                             sh """
+                                export HOME=\$WORKSPACE
                                 cd backend
                                 docker build -t backend .
                                 docker tag backend:latest ${repo}:${tag}
@@ -559,6 +562,7 @@ pipeline {
                             def repo = "${env.ECR_REGISTRY}/teach-bleats-cache"
 
                             sh """
+                                export HOME=\$WORKSPACE
                                 cd cache
                                 docker build -t cache .
                                 docker tag cache:latest ${repo}:${tag}
