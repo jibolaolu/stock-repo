@@ -541,7 +541,7 @@ pipeline {
                     steps {
                         script {
                             def tag = env.FRONTEND_VERSION
-                            def repo = "${env.ECR_REGISTRY}/teach-bleats-frontend"
+                            def repo = "${env.ECR_REGISTRY}/tech-bleats-frontend"
                             sh """
                                 export HOME=\$WORKSPACE
                                 cd frontend
@@ -558,7 +558,7 @@ pipeline {
                     steps {
                         script {
                             def tag = env.BACKEND_VERSION
-                            def repo = "${env.ECR_REGISTRY}/teach-bleats-backend"
+                            def repo = "${env.ECR_REGISTRY}/tech-bleats-backend"
                             sh """
                                 export HOME=\$WORKSPACE
                                 cd backend
