@@ -445,6 +445,9 @@ pipeline {
 
     environment {
         AWS_REGION = 'eu-west-2'
+        FRONTEND_VERSION = ''
+        BACKEND_VERSION = ''
+        CACHE_VERSION = ''
     }
 
     stages {
@@ -467,17 +470,14 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                script {
-                    echo '🔄 Checking out source code...'
-                    checkout([$class: 'GitSCM',
-                        branches: [[name: '*/master']],
-                        extensions: [[$class: 'WipeWorkspace']],
-                        userRemoteConfigs: [[
-                            credentialsId: 'github-credentials',
-                            url: 'https://github.com/jibolaolu/stock-repo.git'
-                        ]]
-                    ])
-                }
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/master']],
+                    extensions: [[$class: 'WipeWorkspace']],
+                    userRemoteConfigs: [[
+                        credentialsId: 'github-credentials',
+                        url: 'https://github.com/jibolaolu/stock-repo.git'
+                    ]]
+                ])
             }
         }
 
@@ -487,60 +487,41 @@ pipeline {
                     def changedFiles = sh(script: "git diff --name-only HEAD^ HEAD", returnStdout: true).trim().split("\n")
                     echo "🧾 Changed Files: ${changedFiles}"
 
-                    env.BUILD_FRONTEND = "false"
-                    env.BUILD_BACKEND  = "false"
-                    env.BUILD_CACHE    = "false"
-
-                    for (file in changedFiles) {
-                        if (file.startsWith("frontend/")) env.BUILD_FRONTEND = "true"
-                        if (file.startsWith("backend/"))  env.BUILD_BACKEND  = "true"
-                        if (file.startsWith("cache/"))    env.BUILD_CACHE    = "true"
-                        if (file == "Dockerfile" || file == ".env") {
-                            env.BUILD_FRONTEND = "true"
-                            env.BUILD_BACKEND  = "true"
-                            env.BUILD_CACHE    = "true"
-                        }
-                    }
-
-                    echo "📦 Frontend Changed: ${env.BUILD_FRONTEND}"
-                    echo "📦 Backend Changed: ${env.BUILD_BACKEND}"
-                    echo "📦 Cache Changed: ${env.BUILD_CACHE}"
+                    env.BUILD_FRONTEND = changedFiles.any { it.startsWith("frontend/") || it == "Dockerfile" || it == ".env" } ? "true" : "false"
+                    env.BUILD_BACKEND  = changedFiles.any { it.startsWith("backend/")  || it == "Dockerfile" || it == ".env" } ? "true" : "false"
+                    env.BUILD_CACHE    = changedFiles.any { it.startsWith("cache/")    || it == "Dockerfile" || it == ".env" } ? "true" : "false"
                 }
             }
         }
 
-        stage('Calculate Version Numbers') {
+        stage('Get Latest Versions') {
             steps {
                 script {
-                    def repos = [
-                        [name: 'teach-bleats-frontend', buildFlag: 'BUILD_FRONTEND', envVar: 'FRONTEND_VERSION'],
-                        [name: 'teach-bleats-backend',  buildFlag: 'BUILD_BACKEND',  envVar: 'BACKEND_VERSION'],
-                        [name: 'teach-bleats-cache',    buildFlag: 'BUILD_CACHE',    envVar: 'CACHE_VERSION']
-                    ]
+                    if (env.BUILD_FRONTEND == "true") {
+                        def lastFrontend = sh(script: """
+                            aws ecr describe-images --repository-name teach-bleats-frontend --region ${AWS_REGION} \
+                            --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' \
+                            --output text 2>/dev/null || echo none
+                        """, returnStdout: true).trim()
+                        env.FRONTEND_VERSION = (lastFrontend == "none") ? "1.0.0" : bumpVersion(lastFrontend)
+                    }
 
-                    for (repo in repos) {
-                        if (env[repo.buildFlag] == "true") {
-                            def lastTag = sh(
-                                script: """
-                                    aws ecr describe-images --repository-name ${repo.name} --region ${AWS_REGION} \
-                                    --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' \
-                                    --output text 2>/dev/null || echo none
-                                """,
-                                returnStdout: true
-                            ).trim()
+                    if (env.BUILD_BACKEND == "true") {
+                        def lastBackend = sh(script: """
+                            aws ecr describe-images --repository-name teach-bleats-backend --region ${AWS_REGION} \
+                            --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' \
+                            --output text 2>/dev/null || echo none
+                        """, returnStdout: true).trim()
+                        env.BACKEND_VERSION = (lastBackend == "none") ? "1.0.0" : bumpVersion(lastBackend)
+                    }
 
-                            def newVersion = "1.0.0"
-                            if (lastTag != "none" && lastTag != "") {
-                                def parts = lastTag.tokenize('.')
-                                if (parts.size() == 3) {
-                                    parts[2] = (parts[2].toInteger() + 1).toString()
-                                    newVersion = parts.join('.')
-                                }
-                            }
-
-                            echo "📌 New version for ${repo.name}: ${newVersion}"
-                            env[repo.envVar] = newVersion
-                        }
+                    if (env.BUILD_CACHE == "true") {
+                        def lastCache = sh(script: """
+                            aws ecr describe-images --repository-name teach-bleats-cache --region ${AWS_REGION} \
+                            --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' \
+                            --output text 2>/dev/null || echo none
+                        """, returnStdout: true).trim()
+                        env.CACHE_VERSION = (lastCache == "none") ? "1.0.0" : bumpVersion(lastCache)
                     }
                 }
             }
@@ -555,7 +536,6 @@ pipeline {
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
                     script {
-                        echo '🔐 Logging into AWS ECR...'
                         sh """
                             export AWS_ACCESS_KEY_ID=\$AWS_ACCESS_KEY_ID
                             export AWS_SECRET_ACCESS_KEY=\$AWS_SECRET_ACCESS_KEY
@@ -570,60 +550,48 @@ pipeline {
         stage('Build & Push Docker Images') {
             parallel {
                 stage('Build & Push Frontend') {
-                    when {
-                        expression { env.BUILD_FRONTEND == "true" }
-                    }
+                    when { expression { env.BUILD_FRONTEND == "true" } }
                     steps {
                         script {
-                            def imageTag = env.FRONTEND_VERSION
-                            def ecrRepo = "${env.ECR_REGISTRY}/teach-bleats-frontend"
-                            echo "🚀 Building Frontend Image: ${ecrRepo}:${imageTag}"
-
+                            def tag = env.FRONTEND_VERSION
+                            def repo = "${env.ECR_REGISTRY}/teach-bleats-frontend"
                             sh """
                                 cd frontend
                                 docker build -t frontend .
-                                docker tag frontend:latest ${ecrRepo}:${imageTag}
-                                docker push ${ecrRepo}:${imageTag}
+                                docker tag frontend:latest ${repo}:${tag}
+                                docker push ${repo}:${tag}
                             """
                         }
                     }
                 }
 
                 stage('Build & Push Backend') {
-                    when {
-                        expression { env.BUILD_BACKEND == "true" }
-                    }
+                    when { expression { env.BUILD_BACKEND == "true" } }
                     steps {
                         script {
-                            def imageTag = env.BACKEND_VERSION
-                            def ecrRepo = "${env.ECR_REGISTRY}/teach-bleats-backend"
-                            echo "🚀 Building Backend Image: ${ecrRepo}:${imageTag}"
-
+                            def tag = env.BACKEND_VERSION
+                            def repo = "${env.ECR_REGISTRY}/teach-bleats-backend"
                             sh """
                                 cd backend
                                 docker build -t backend .
-                                docker tag backend:latest ${ecrRepo}:${imageTag}
-                                docker push ${ecrRepo}:${imageTag}
+                                docker tag backend:latest ${repo}:${tag}
+                                docker push ${repo}:${tag}
                             """
                         }
                     }
                 }
 
                 stage('Build & Push Cache') {
-                    when {
-                        expression { env.BUILD_CACHE == "true" }
-                    }
+                    when { expression { env.BUILD_CACHE == "true" } }
                     steps {
                         script {
-                            def imageTag = env.CACHE_VERSION
-                            def ecrRepo = "${env.ECR_REGISTRY}/teach-bleats-cache"
-                            echo "🚀 Building Cache Image: ${ecrRepo}:${imageTag}"
-
+                            def tag = env.CACHE_VERSION
+                            def repo = "${env.ECR_REGISTRY}/teach-bleats-cache"
                             sh """
                                 cd cache
                                 docker build -t cache .
-                                docker tag cache:latest ${ecrRepo}:${imageTag}
-                                docker push ${ecrRepo}:${imageTag}
+                                docker tag cache:latest ${repo}:${tag}
+                                docker push ${repo}:${tag}
                             """
                         }
                     }
@@ -634,11 +602,20 @@ pipeline {
 
     post {
         success {
-            echo "✅ Build & Push completed successfully!"
+            echo "✅ Docker images built & pushed successfully."
         }
         failure {
-            echo "❌ Build or push failed!"
+            echo "❌ Pipeline failed."
         }
     }
+}
+
+def bumpVersion(String version) {
+    def parts = version.tokenize('.')
+    if (parts.size() == 3) {
+        parts[2] = (parts[2].toInteger() + 1).toString()
+        return parts.join('.')
+    }
+    return "1.0.0"
 }
 
