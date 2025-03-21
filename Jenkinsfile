@@ -418,14 +418,14 @@ pipeline {
         HOME = "${env.WORKSPACE}"
     }
 
-    options([
+     options {
         buildDiscarder(logRotator(
             daysToKeepStr: '7',
             numToKeepStr: '5',
             artifactDaysToKeepStr: '3',
             artifactNumToKeepStr: '2'
         ))
-    ])
+    }
 
     stages {
         stage('Set AWS Context') {
