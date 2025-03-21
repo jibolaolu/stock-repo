@@ -419,7 +419,12 @@ pipeline {
     }
 
     properties([
-        buildDiscarder(logRotator(numToKeepStr: '5'))
+        buildDiscarder(logRotator(
+            daysToKeepStr: '7',         // Keep builds for 7 days
+            numToKeepStr: '5',          // Or only keep the last 5 builds
+            artifactDaysToKeepStr: '3', // Keep artifacts for 3 days
+            artifactNumToKeepStr: '2'   // Or only keep last 2 artifacts
+        ))
     ])
 
     stages {
