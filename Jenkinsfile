@@ -418,7 +418,7 @@ pipeline {
         HOME = "${env.WORKSPACE}"
     }
 
-    properties([
+    @properties([
         buildDiscarder(logRotator(
             daysToKeepStr: '7',
             numToKeepStr: '5',
