@@ -481,8 +481,8 @@ pipeline {
             steps {
                 script {
                     def repos = [
-                        [name: "teach-bleats-frontend", build: env.BUILD_FRONTEND],
-                        [name: "teach-bleats-backend",  build: env.BUILD_BACKEND],
+                        [name: "tech-bleats-frontend", build: env.BUILD_FRONTEND],
+                        [name: "tech-bleats-backend",  build: env.BUILD_BACKEND],
                         [name: "teach-bleats-cache",    build: env.BUILD_CACHE]
                     ]
 
